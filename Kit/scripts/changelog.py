@@ -30,11 +30,11 @@ class Changelog:
         if len(fix) != 0:
             changelog += "## Bug fixes \n{}".format("\n".join(fix))
         if len(feat) != 0:
-            if len(changelog) != 0:
+            if changelog != "":
                 changelog += "\n\n"
             changelog += "## New features \n{}".format("\n".join(feat))
         if len(lang) != 0:
-            if len(changelog) != 0:
+            if changelog != "":
                 changelog += "\n\n"
             changelog += "## Localization \n{}".format("\n".join(lang))
 
@@ -57,7 +57,7 @@ class Changelog:
             elif self.langPattern.match(line) or "translation" in line or "localization" in line:
                 lang.append(line)
             else:
-                print("Failed to detect commit {} type".format(line))
+                print(f"Failed to detect commit {line} type")
 
         return fix, feat, lang
 

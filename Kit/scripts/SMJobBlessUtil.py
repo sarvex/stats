@@ -95,7 +95,7 @@ def checkCodeSignature(programPath, programType):
     try:
         subprocess.check_call(args, stderr=open("/dev/null"))
     except subprocess.CalledProcessError as e:
-        raise CheckException("%s code signature invalid" % programType, programPath)
+        raise CheckException(f"{programType} code signature invalid", programPath)
 
 def readDesignatedRequirement(programPath, programType):
     """Returns the designated requirement of the program as a string."""
@@ -110,11 +110,15 @@ def readDesignatedRequirement(programPath, programType):
     try:
         req = subprocess.check_output(args, stderr=open("/dev/null"), encoding="utf-8")
     except subprocess.CalledProcessError as e:
-        raise CheckException("%s designated requirement unreadable" % programType, programPath)
+        raise CheckException(
+            f"{programType} designated requirement unreadable", programPath
+        )
 
     reqLines = req.splitlines()
     if len(reqLines) != 1 or not req.startswith("designated => "):
-        raise CheckException("%s designated requirement malformed" % programType, programPath)
+        raise CheckException(
+            f"{programType} designated requirement malformed", programPath
+        )
     return reqLines[0][len("designated => "):]
 
 def readInfoPlistFromPath(infoPath):
@@ -147,21 +151,29 @@ def readPlistFromToolSection(toolPath, segmentName, sectionName):
     try:
         plistDump = subprocess.check_output(args, encoding="utf-8")
     except subprocess.CalledProcessError as e:
-        raise CheckException("tool %s / %s section unreadable" % (segmentName, sectionName), toolPath)
+        raise CheckException(
+            f"tool {segmentName} / {sectionName} section unreadable", toolPath
+        )
 
     # Convert that dump to an property list.
 
     plistLines = plistDump.strip().splitlines(keepends=True)
 
     if len(plistLines) < 3:
-        raise CheckException("tool %s / %s section dump malformed (1)" % (segmentName, sectionName), toolPath)
+        raise CheckException(
+            f"tool {segmentName} / {sectionName} section dump malformed (1)",
+            toolPath,
+        )
 
     header = plistLines[1].strip()
 
-    if not header.endswith("(%s,%s) section" % (segmentName, sectionName)):
-        raise CheckException("tool %s / %s section dump malformed (2)" % (segmentName, sectionName), toolPath)
+    if not header.endswith(f"({segmentName},{sectionName}) section"):
+        raise CheckException(
+            f"tool {segmentName} / {sectionName} section dump malformed (2)",
+            toolPath,
+        )
 
-    del plistLines[0:2]
+    del plistLines[:2]
 
     try:
 
@@ -176,20 +188,25 @@ def readPlistFromToolSection(toolPath, segmentName, sectionName):
                 columns = parts[0].split()
                 assert len(columns) >= 2
                 del columns[0]
-                for hexStr in columns:
-                    data.append(int(hexStr, 16))
+                data.extend(int(hexStr, 16) for hexStr in columns)
             data = bytes(data)
         else:
             data = bytes("".join(plistLines), encoding="utf-8")
 
         plist = plistlib.loads(data)
     except:
-        raise CheckException("tool %s / %s section dump malformed (3)" % (segmentName, sectionName), toolPath)
+        raise CheckException(
+            f"tool {segmentName} / {sectionName} section dump malformed (3)",
+            toolPath,
+        )
 
     # Check the root of the property list.
 
     if not isinstance(plist, dict):
-        raise CheckException("tool %s / %s property list root must be a dictionary" % (segmentName, sectionName), toolPath)
+        raise CheckException(
+            f"tool {segmentName} / {sectionName} property list root must be a dictionary",
+            toolPath,
+        )
 
     return plist
 
@@ -222,7 +239,7 @@ def checkStep1(appPath):
 
     # Check that we have at least one tool.
 
-    if len(toolPathList) == 0:
+    if not toolPathList:
         raise CheckException("no tools found", toolDirPath)
 
     return toolPathList
@@ -232,7 +249,7 @@ def checkStep2(appPath, toolPathList):
 
     # Create a map from the tool name (not path) to its designated requirement.
 
-    toolNameToReqMap = dict()
+    toolNameToReqMap = {}
     for toolPath in toolPathList:
         req = readDesignatedRequirement(toolPath, "tool")
         toolNameToReqMap[os.path.basename(toolPath)] = req
@@ -267,7 +284,9 @@ def checkStep2(appPath, toolPathList):
 
     for toolName in infoToolDict:
         if infoToolDict[toolName] != toolNameToReqMap[toolName]:
-            raise CheckException("tool designated requirement (%s) doesn't match entry in 'SMPrivilegedExecutables' (%s)" % (toolNameToReqMap[toolName], infoToolDict[toolName]))
+            raise CheckException(
+                f"tool designated requirement ({toolNameToReqMap[toolName]}) doesn't match entry in 'SMPrivilegedExecutables' ({infoToolDict[toolName]})"
+            )
 
 def checkStep3(appPath, toolPathList):
     """Checks the "Info.plist" embedded in each helper tool."""
@@ -299,7 +318,10 @@ def checkStep3(appPath, toolPathList):
         # match exactly the designated requirement of the app.
 
         if infoClientList[0] != appReq:
-            raise CheckException("app designated requirement (%s) doesn't match entry in 'SMAuthorizedClients' (%s)" % (appReq, infoClientList[0]), toolPath)
+            raise CheckException(
+                f"app designated requirement ({appReq}) doesn't match entry in 'SMAuthorizedClients' ({infoClientList[0]})",
+                toolPath,
+            )
 
 def checkStep4(appPath, toolPathList):
     """Checks the "launchd.plist" embedded in each helper tool."""
@@ -396,7 +418,7 @@ def setreq(appPath, appInfoPlistPath, toolInfoPlistPaths):
         appInfo["SMPrivilegedExecutables"] = appToolDict
         with open(appInfoPlistPath, 'wb') as fp:
             plistlib.dump(appInfo, fp)
-        print ("%s: updated" % appInfoPlistPath, file = sys.stdout)
+        print(f"{appInfoPlistPath}: updated", file = sys.stdout)
 
     # Set the SMAuthorizedClients value in each tool's "Info.plist".
 
@@ -416,7 +438,7 @@ def setreq(appPath, appInfoPlistPath, toolInfoPlistPaths):
             toolInfo["SMAuthorizedClients"] = toolAppListSorted
             with open(toolInfoPlistPath, 'wb') as f:
                 plistlib.dump(toolInfo, f)
-            print("%s: updated" % toolInfoPlistPath, file = sys.stdout)
+            print(f"{toolInfoPlistPath}: updated", file = sys.stdout)
 
 def main():
     options, appArgs = getopt.getopt(sys.argv[1:], "d")
@@ -431,30 +453,38 @@ def main():
     if len(appArgs) == 0:
         raise UsageException()
     command = appArgs[0]
-    if command == "check":
-        if len(appArgs) != 2:
-            raise UsageException()
-        check(appArgs[1])
-    elif command == "setreq":
-        if len(appArgs) < 4:
-            raise UsageException()
-        setreq(appArgs[1], appArgs[2], appArgs[3:])
-    else:
+    if (
+        command == "check"
+        and len(appArgs) != 2
+        or command not in ["check", "setreq"]
+    ):
         raise UsageException()
+    elif command == "check":
+        check(appArgs[1])
+    elif len(appArgs) < 4:
+        raise UsageException()
+    else:
+        setreq(appArgs[1], appArgs[2], appArgs[3:])
 
 if __name__ == "__main__":
     try:
         main()
     except CheckException as e:
         if e.path is None:
-            print("%s: %s" % (os.path.basename(sys.argv[0]), e.message), file = sys.stderr)
+            print(f"{os.path.basename(sys.argv[0])}: {e.message}", file = sys.stderr)
         else:
             path = e.path
             if path.endswith("/"):
                 path = path[:-1]
-            print("%s: %s" % (path, e.message), file = sys.stderr)
+            print(f"{path}: {e.message}", file = sys.stderr)
         sys.exit(1)
     except UsageException as e:
-        print("usage: %s check  /path/to/app" % os.path.basename(sys.argv[0]), file = sys.stderr)
-        print("       %s setreq /path/to/app /path/to/app/Info.plist /path/to/tool/Info.plist..." % os.path.basename(sys.argv[0]), file = sys.stderr)
+        print(
+            f"usage: {os.path.basename(sys.argv[0])} check  /path/to/app",
+            file=sys.stderr,
+        )
+        print(
+            f"       {os.path.basename(sys.argv[0])} setreq /path/to/app /path/to/app/Info.plist /path/to/tool/Info.plist...",
+            file=sys.stderr,
+        )
         sys.exit(1)
